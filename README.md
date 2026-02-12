@@ -1,31 +1,102 @@
-## README的意义
+# REVIS: Sparse Latent Steering to Mitigate Object Hallucination in Large Vision-Language Models
 
-README 文件通常是项目的第一个入口点。你应该通过 README 明确地告诉大家，为什么他们应该使用你的项目，以及安装和使用的方法。
+This repository contains the official implementation of the paper **"REVIS: Sparse Latent Steering to Mitigate Object Hallucination in Large Vision-Language Models"**.
 
-如果在仅仅看文档而不看代码的情况下就可以使用你的项目，该文档就完成了。 这个非常重要，因为这将使项目的文档接口与其内部实现分开，只要接口保持不变，就可以自由更改项目的内部结构。 
+## Overview 
 
-**文档，而不是代码定义了项目的使用方式。**
+**REVIS** is a training-free framework designed to mitigate object hallucination in Large Vision-Language Models (LVLMs). By explicitly decoupling visual information from language priors via orthogonal projection and employing sparse intervention, REVIS effectively restores visual grounding during inference.
 
-一个规范的README文档能减少用户检索信息的时间。
+---
+## Project Structure
 
-## 标准 README
+```text
+Revis/
+├── data/                         # Datasets and assets
+│   ├── OH_sampled_data_100.json  # Sampled data for vector extraction
+|   ├── coco_pope_calibration_merged.jsonl  # Sampled data for layer selection 
+├── calibration_results/          # Output directory for layer selection results
+├── steering_utils/               # Core implementation modules
+│   ├── data_loader.py            # Data loading and preprocessing
+│   ├── llm_layers.py             # Tools for accessing and manipulating LLM layers
+│   ├── pca.py                    # PCA analysis for visualization (e.g., t-SNE)
+│   └── vector_calculator.py      # Implements Orthogonal Visual Vector Construction
+├── utils/                        # Evaluation metrics and tools
+│   ├── chair.py                  # CHAIR metric evaluation script
+│   ├── mme.py                    # MME benchmark evaluation script
+│   ├── mmvet_ori.py              # MM-Vet benchmark evaluation script
+└── vector/                       # Pre-computed steering vectors
+    ├── llava15_none_image.pt     # Steering vector for LLaVA-1.5
+    ├── llava16_none_image.pt     # Steering vector for LLaVA-1.6
+    └── qwen2.5vl_none_image.pt   # Steering vector for Qwen2.5-VL
 
-一个标准的README文件应当至少包含以下的内容：
+```
 
-- 项目背景：说明创建本项目的背景与动机，创建本项目试图解决的问题 
-- 安装方法：说明如何快速上手使用该项目
-- 使用方法：列出本项目能够提供的功能以及使用这些功能的方法
-- 文档：现阶段antcode鼓励用户使用语雀组织项目文档，在README上应当放入项目的语雀文档链接
+---
 
-## 附加内容
+## Preparation  
+Set up the environment with:
 
-视项目的实际情况，同样也应该包含以下内容：
+```bash
+pip install transformers >=4.53.0
+```
 
-- 项目特性：说明本项目相较于其他同类项目所具有的特性
-- 兼容环境：说明本项目能够在什么平台上运行
-- 使用示例：展示一些使用本项目的小demo
-- 主要项目负责人：使用“@”标注出本项目的主要负责人，方便项目的用户沟通
-- 参与贡献的方式：规定好其他用户参与本项目并贡献代码的方式
-- 项目的参与者：列出项目主要的参与人
-- 已知用户：列出已经在生产环境中使用了本项目的全部或部分组件的公司或组织
-- 赞助者：列出为本项目提供赞助的用户
+---
+
+## Usage
+> **Note**: All results are based on **Hugging Face model versions** (via `transformers`) for consistency. We do not use model-specific codebases like the LLaVA GitHub repository.
+
+
+The REVIS workflow consists of two primary stages:
+
+1. **Vector Extraction**  
+2. **Inference with Latent Steering**
+
+### 1. Vector Extraction  
+To compute your own steering vectors using custom data:
+
+```bash
+python main_all_visual_only.py compute
+```
+- Computes Vectors
+- Applies Gram-Schmidt Orthogonalization
+- Saves the purified vector to `vector/[model_name]_none_image.pt`
+
+### 2. Inference with REVIS  
+Apply sparse latent steering during generation:
+```bash
+# load Qwen2.5VL vector for steering
+python main_all_visual_only.py run 
+```
+
+---
+
+## Evaluation  
+
+We evaluate REVIS using multiple standard benchmarks:
+
+
+| Benchmark  | Task                                 | Metric                     |
+|------------|--------------------------------------|----------------------------|
+| **POPE**   | Object hallucination detection       | Accuracy, Precision, Recall |
+| **CHAIR**  | Hallucination attribute analysis     | CHAIR Score                |
+| **MME**    | Multi-modal perception & cognition   | Score                      |
+| **MM-Vet** | Open-ended reasoning                 | Qwen3 judged score         |
+
+
+---
+
+## Key Components  
+
+### 1. Vector Extraction (`steering_utils/`)
+
+The core logic for constructing the steering vector lies in `steering_utils/vector_calculator.py`.
+* It computes the **Raw Visual Vector** and **Language Prior Vector**.
+* It performs the **Gram-Schmidt Orthogonalization** to synthesize the purified visual vector.
+
+### 2. Pre-computed Vectors (`vector/`)
+We provide pre-computed orthogonal steering vectors for popular LVLMs. You can directly load these `.pt` files to reproduce our results without re-running the extraction process:
+
+* **LLaVA-1.5**
+* **LLaVA-1.6**
+* **Qwen2.5-VL**
+
